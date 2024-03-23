@@ -1,0 +1,17 @@
+{
+  "name": "streamyard-clone",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon index.js"
+  },
+  "dependencies": {
+    "express": "^4.19.1",
+    "socket.io": "^4.7.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+}
