@@ -1,14 +1,18 @@
-import http from 'http'
-import path from 'path'
-import { spawn } from 'child_process'
-import express from 'express'
-import { Server as SocketIO } from 'socket.io'
+
+import http from "http";
+import express from "express";
+import path from "path";
+import { spawn } from "child_process";
+import { Server as SocketIO } from "socket.io";
 
 const app = express();
 const server = http.createServer(app);
-const io = new SocketIO(server)
+const io = new SocketIO(server);
 
-const options = [
+let key = '';
+let ffmpegProcess;
+
+const initialOptions = [
     '-i',
     '-',
     '-c:v', 'libx264',
@@ -25,37 +29,68 @@ const options = [
     '-c:a', 'aac',
     '-b:a', '128k',
     '-ar', 128000 / 4,
-    '-f', 'flv',
-    `rtmp://a.rtmp.youtube.com/live2/dcfx-m7v2-j248-3185-9207`,
+    '-f', 'flv'
 ];
 
-const ffmpegProcess = spawn('ffmpeg', options);
+function startFfmpeg() {
+    const options = [...initialOptions, `rtmp://a.rtmp.youtube.com/live2/${key}`];
+    ffmpegProcess = spawn('ffmpeg', options);
 
-ffmpegProcess.stdout.on('data', (data) => {
-    console.log(`ffmpeg stdout: ${data}`);
-});
+    ffmpegProcess.stdout.on('data', (data) => {
+        console.log(`ffmpeg stdout: ${data}`);
+    });
 
-ffmpegProcess.stderr.on('data', (data) => {
-    console.error(`ffmpeg stderr: ${data}`);
-});
+    ffmpegProcess.stderr.on('data', (data) => {
+        console.error(`ffmpeg stderr: ${data}`);
+    });
 
-ffmpegProcess.on('close', (code) => {
-    console.log(`ffmpeg process exited with code ${code}`);
-});
+    ffmpegProcess.on('close', (code) => {
+        console.log(`ffmpeg process exited with code ${code}`);
+    });
+}
 
+function stopFfmpeg() {
+    if (ffmpegProcess) {
+        ffmpegProcess.kill('SIGINT');
+        console.log('ffmpeg process stopped.');
+    }
+}
 
-
-app.use(express.static(path.resolve('./public')))
-
+app.use(express.static(path.resolve('./public')));
 
 io.on('connection', socket => {
-    console.log('Socket Connected', socket.id);
-    socket.on('binarystream', stream => {
-        console.log('Binary Stream Incommming...')
-        ffmpegProcess.stdin.write(stream, (err) => {
-            console.log('Err', err)
-        })
-    })
-})
+    console.log('Socket Connected:', socket.id);
 
-server.listen(3000, () => console.log(`HTTP Server is runnning on PORT 3000`))
+    socket.on('key', userKey => {
+        console.log('Received key:', userKey);
+        key = userKey;
+        if (ffmpegProcess) {
+            stopFfmpeg();
+            startFfmpeg();
+        } else {
+            startFfmpeg();
+        }
+    });
+
+    socket.on('stop-stream', () => {
+        console.log('Stopping stream...');
+        stopFfmpeg();
+    });
+
+    socket.on('binarystream', stream => {
+        if (ffmpegProcess && !ffmpegProcess.killed && ffmpegProcess.stdin && !ffmpegProcess.stdin.destroyed) {
+            console.log('Binary Stream Incoming...');
+            ffmpegProcess.stdin.write(stream, (err) => {
+                if (err) {
+                    console.error('Error writing to ffmpeg stdin:', err);
+                }
+            });
+        } else {
+            console.log('No active or valid stream to write to.');
+        }
+    });
+});
+
+server.listen(3000, () => {
+    console.log(`Http server started running at PORT 3000.`);
+});

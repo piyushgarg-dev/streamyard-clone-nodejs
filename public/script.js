@@ -1,5 +1,8 @@
+
 const userVideo = document.getElementById('user-video')
 const startButton = document.getElementById('start-btn')
+const keyInput = document.getElementById('key-id');
+const stopButton = document.getElementById('stop-btn');
 
 const state = { media: null }
 const socket = io()
@@ -27,3 +30,17 @@ window.addEventListener('load', async e => {
     state.media = media
     userVideo.srcObject = media
 })
+
+
+startButton.addEventListener('click', () => {
+    const key = keyInput.value.trim();
+    if (key) {
+        socket.emit('key', key);
+    } else {
+        alert('Please enter a key');
+    }
+});
+
+stopButton.addEventListener('click', () => {
+    socket.emit('stop-stream');
+});
